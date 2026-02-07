@@ -48,6 +48,25 @@ async def run_analysis(
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
+@router.post("/analysis/latest-batch", response_model=List[AnalysisResponse], dependencies=[Depends(verify_api_key)])
+async def get_latest_analysis_batch(
+    tickers: List[str],
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the latest analysis result for a batch of tickers.
+    
+    This is more efficient than calling /analysis/history for each ticker.
+    """
+    try:
+        service = AnalysisService(db)
+        results = await service.get_latest_batch(tickers)
+        return results
+    except Exception as e:
+        logger.error(f"Failed to fetch batch analysis: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch batch analysis: {str(e)}")
+
+
 @router.get("/analysis/history/{ticker}", response_model=Dict[str, Any], dependencies=[Depends(verify_api_key)])
 async def get_analysis_history(
     ticker: str,

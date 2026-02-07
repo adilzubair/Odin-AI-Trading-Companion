@@ -53,5 +53,13 @@ export const monitorService = {
         const response = await apiClient.post<AnalysisResponse>("/analysis/run", { ticker });
         return response.data;
     },
+
+    /**
+     * Get latest analysis for a batch of tickers
+     */
+    getLatestAnalysisBatch: async (tickers: string[]): Promise<AnalysisResponse[]> => {
+        const response = await apiClient.post<AnalysisResponse[]>("/analysis/latest-batch", tickers);
+        return response.data;
+    },
 };
 

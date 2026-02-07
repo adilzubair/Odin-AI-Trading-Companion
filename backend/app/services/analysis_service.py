@@ -3,7 +3,7 @@ Analysis service integrating TradingAgents framework.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from typing import List, Optional
 from datetime import datetime, date
 import logging
@@ -231,4 +231,55 @@ class AnalysisService:
             )
         except Exception as e:
             logger.error(f"Failed to get analysis {analysis_id}: {e}", exc_info=True)
+            raise
+
+    async def get_latest_batch(self, tickers: List[str]) -> List[AnalysisResponse]:
+        """Get the latest analysis result for each ticker in the list."""
+        if not tickers:
+            return []
+            
+        try:
+            # Subquery to find the latest created_at for each ticker
+            subq = (
+                select(
+                    AnalysisResult.ticker,
+                    func.max(AnalysisResult.created_at).label("max_created_at")
+                )
+                .where(AnalysisResult.ticker.in_(tickers))
+                .group_by(AnalysisResult.ticker)
+                .subquery()
+            )
+            
+            # Join with the main table to get full records
+            stmt = (
+                select(AnalysisResult)
+                .join(
+                    subq,
+                    (AnalysisResult.ticker == subq.c.ticker) & 
+                    (AnalysisResult.created_at == subq.c.max_created_at)
+                )
+            )
+            
+            result = await self.db.execute(stmt)
+            results = result.scalars().all()
+            
+            return [
+                AnalysisResponse(
+                    ticker=r.ticker,
+                    trade_date=r.trade_date,
+                    market_report=r.market_report,
+                    sentiment_report=r.sentiment_report,
+                    news_report=r.news_report,
+                    fundamentals_report=r.fundamentals_report,
+                    investment_debate=r.investment_debate,
+                    trader_decision=r.trader_decision,
+                    risk_debate=r.risk_debate,
+                    final_decision=r.final_decision,
+                    confidence=r.confidence,
+                    created_at=r.created_at
+                )
+                for r in results
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get batch analysis: {e}", exc_info=True)
             raise

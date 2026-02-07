@@ -58,20 +58,22 @@ export function useMonitor() {
             const data = await monitorService.getWatchlist();
             setWatchlist(data);
 
-            // Fetch analysis reports for each ticker
+            // Fetch analysis reports for all tickers in batch
             const reports = new Map<string, AnalysisResponse>();
-            await Promise.all(
-                data.map(async (ticker) => {
-                    try {
-                        const history = await monitorService.getAnalysisHistory(ticker.symbol, 1);
-                        if (history.length > 0) {
-                            reports.set(ticker.symbol, history[0]);
-                        }
-                    } catch (err) {
-                        console.error(`Failed to fetch analysis for ${ticker.symbol}:`, err);
-                    }
-                })
-            );
+            const symbols = data.map((t) => t.symbol);
+
+            if (symbols.length > 0) {
+                try {
+                    const batchResults = await monitorService.getLatestAnalysisBatch(symbols);
+                    batchResults.forEach((report) => {
+                        reports.set(report.ticker, report);
+                    });
+                } catch (err) {
+                    console.error("Failed to fetch batch analysis:", err);
+                    // Don't fail the whole watchlist load if analysis fetch fails
+                }
+            }
+
             setAnalysisReports(reports);
         } catch (err) {
             const error = err as Error;
