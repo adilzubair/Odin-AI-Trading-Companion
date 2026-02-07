@@ -15,6 +15,7 @@ export interface Position {
 
 export interface Portfolio {
     investedAmount: number;
+    cashBalance: number;
     currentBalance: number;
     totalReturns: number;
     totalReturnsPercentage: number;
@@ -38,7 +39,8 @@ export const useTradeStore = create<TradeStore>((set) => ({
     tradeOrders: [],
     portfolio: {
         investedAmount: 0,
-        currentBalance: 0,
+        cashBalance: 1000000,
+        currentBalance: 1000000,
         totalReturns: 0,
         totalReturnsPercentage: 0
     },
@@ -48,9 +50,24 @@ export const useTradeStore = create<TradeStore>((set) => ({
 
     executeTrade: (order) =>
         set((state) => {
-            // Calculate new portfolio state
             const orderTotal = order.total;
             const isBuy = order.type === 'buy';
+
+            // Safe Cash Balance access with fallback to 1M if undefined
+            let newCashBalance = state.portfolio.cashBalance ?? 1000000;
+
+            // Insufficient Funds Check for Buy
+            if (isBuy && orderTotal > newCashBalance) {
+                console.error("Insufficient funds");
+                return state;
+            }
+
+            // Update Cash Balance
+            if (isBuy) {
+                newCashBalance -= orderTotal;
+            } else {
+                newCashBalance += orderTotal;
+            }
 
             // New positions array
             let newPositions = [...state.positions];
@@ -68,7 +85,7 @@ export const useTradeStore = create<TradeStore>((set) => ({
                         ...pos,
                         quantity: newQuantity,
                         avgPrice: newAvgPrice,
-                        currentPrice: order.price, // Update current price to latest trade
+                        currentPrice: order.price,
                         totalValue: newQuantity * order.price,
                     };
                 } else {
@@ -85,7 +102,7 @@ export const useTradeStore = create<TradeStore>((set) => ({
                     });
                 }
             } else {
-                // Handle Sell (assume we can sell only what we have for now, though store doesn't enforce check yet)
+                // Handle Sell
                 if (existingPositionIndex !== -1) {
                     const pos = newPositions[existingPositionIndex];
                     const newQuantity = pos.quantity - order.quantity;
@@ -103,11 +120,17 @@ export const useTradeStore = create<TradeStore>((set) => ({
             }
 
             // Recalculate Portfolio Summary
-            // Mock: Invested Amount matches current hold cost for simplicity of this mock phase
             const investedAmount = newPositions.reduce((sum, p) => sum + (p.quantity * p.avgPrice), 0);
-            const currentBalance = newPositions.reduce((sum, p) => sum + p.totalValue, 0);
-            const totalReturns = currentBalance - investedAmount;
-            const totalReturnsPercentage = investedAmount > 0 ? (totalReturns / investedAmount) * 100 : 0;
+            const portfolioValue = newPositions.reduce((sum, p) => sum + p.totalValue, 0);
+
+            // Total Account Value = Cash + Portfolio Value
+            // This ensures total value doesn't artificially inflate on buy. 
+            // e.g. Start 1M. Buy 100k. Cash 900k + Stock 100k = 1M. Correct.
+            const currentTotalBalance = newCashBalance + portfolioValue;
+
+            // Total Returns
+            const totalReturns = currentTotalBalance - 1000000;
+            const totalReturnsPercentage = (totalReturns / 1000000) * 100;
 
             return {
                 tradeOrders: [
@@ -121,7 +144,8 @@ export const useTradeStore = create<TradeStore>((set) => ({
                 positions: newPositions,
                 portfolio: {
                     investedAmount,
-                    currentBalance,
+                    cashBalance: newCashBalance,
+                    currentBalance: currentTotalBalance,
                     totalReturns,
                     totalReturnsPercentage
                 }
@@ -146,15 +170,24 @@ export const useTradeStore = create<TradeStore>((set) => ({
 
         // Re-sum portfolio
         const investedAmount = newPositions.reduce((sum, p) => sum + (p.quantity * p.avgPrice), 0);
-        const currentBalance = newPositions.reduce((sum, p) => sum + p.totalValue, 0);
-        const totalReturns = currentBalance - investedAmount;
-        const totalReturnsPercentage = investedAmount > 0 ? (totalReturns / investedAmount) * 100 : 0;
+        const portfolioValue = newPositions.reduce((sum, p) => sum + p.totalValue, 0);
+
+        // Safe Cash Balance access with fallback
+        const cashBalance = state.portfolio.cashBalance ?? 1000000;
+
+        // Total Account Value = Cash + Portfolio Value
+        const currentTotalBalance = cashBalance + portfolioValue;
+
+        const totalReturns = currentTotalBalance - 1000000;
+        const totalReturnsPercentage = (totalReturns / 1000000) * 100;
 
         return {
             positions: newPositions,
             portfolio: {
+                ...state.portfolio,
                 investedAmount,
-                currentBalance,
+                cashBalance,
+                currentBalance: currentTotalBalance,
                 totalReturns,
                 totalReturnsPercentage
             }
