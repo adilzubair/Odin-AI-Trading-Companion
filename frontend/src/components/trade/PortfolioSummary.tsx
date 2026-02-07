@@ -10,7 +10,18 @@ export default function PortfolioSummary() {
     const isPositive = portfolio.totalReturns >= 0;
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            {/* Cash Balance */}
+            <div className="rounded-lg border border-white/[0.08] bg-[#121212] p-6 space-y-2">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Cash Balance</span>
+                </div>
+                <div className="font-mono-data text-2xl font-semibold text-white">
+                    {formatCurrency(portfolio.cashBalance)}
+                </div>
+            </div>
+
             {/* Invested Amount */}
             <div className="rounded-lg border border-white/[0.08] bg-[#121212] p-6 space-y-2">
                 <div className="flex items-center gap-2 text-gray-400 text-sm">
@@ -22,11 +33,11 @@ export default function PortfolioSummary() {
                 </div>
             </div>
 
-            {/* Current Balance */}
+            {/* Total Account Value */}
             <div className="rounded-lg border border-white/[0.08] bg-[#121212] p-6 space-y-2">
                 <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <DollarSign className="h-4 w-4" />
-                    <span>Current Balance</span>
+                    <TrendingUp className="h-4 w-4" />
+                    <span>Total Value</span>
                 </div>
                 <div className="font-mono-data text-2xl font-semibold text-white">
                     {formatCurrency(portfolio.currentBalance)}
