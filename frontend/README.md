@@ -203,4 +203,4 @@ NEXT_PUBLIC_ENABLE_REAL_TRADING=false
 
 **Build by Odin AI Team**
 
-**Happy Trading!** 📈
+**Happy Trading!!** 📈
