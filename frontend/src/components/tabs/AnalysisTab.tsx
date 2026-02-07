@@ -10,6 +10,7 @@ import EmptyState from "@/components/feedback/EmptyState";
 import RetryButton from "@/components/feedback/RetryButton";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import MarkdownRenderer from "@/components/ui/MarkdownRenderer";
 
 const POPULAR_STOCKS: Ticker[] = [
     { symbol: "AAPL", type: "stock", name: "Apple Inc." },
@@ -332,30 +333,28 @@ export default function AnalysisTab() {
                                         )}
                                     </div>
 
-                                    {/* Report Content */}
-                                    {report ? (
-                                        <div className="space-y-4">
-                                            {/* Market Report */}
-                                            <div>
-                                                <h4 className="text-sm font-semibold text-gray-400 mb-2">
-                                                    Market Report
-                                                </h4>
-                                                <p className="text-sm text-gray-300 leading-relaxed">
-                                                    {report.market_report}
-                                                </p>
-                                            </div>
+                                            {/* Report Content */}
+                                            {report ? (
+                                                <div className="space-y-6">
+                                                    {/* Market Report */}
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">
+                                                            Market Report
+                                                        </h4>
+                                                        <MarkdownRenderer content={report.market_report} />
+                                                    </div>
 
-                                            {/* Risk Debate */}
-                                            <div>
-                                                <h4 className="text-sm font-semibold text-gray-400 mb-2">
-                                                    Risk Analysis
-                                                </h4>
-                                                <p className="text-sm text-gray-300 leading-relaxed">
-                                                    {typeof report.risk_debate === "object" && report.risk_debate ? (report.risk_debate as any).judge_decision : report.risk_debate}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ) : (
+                                                    {/* Risk Debate */}
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">
+                                                            Risk Analysis
+                                                        </h4>
+                                                        <MarkdownRenderer 
+                                                            content={typeof report.risk_debate === "object" && report.risk_debate ? (report.risk_debate as any).judge_decision : report.risk_debate} 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : (
                                         <div className="text-center py-8">
                                             <Brain className="h-8 w-8 text-gray-600 mx-auto mb-2" />
                                             <p className="text-sm text-gray-500">

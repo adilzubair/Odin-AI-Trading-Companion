@@ -8,7 +8,7 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev_secret_key";
 // Retry configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const TIMEOUT = 30000; // 30 seconds
+const TIMEOUT = 300000; // 5 minutes (needed for AI analysis)
 
 /**
  * Create Axios instance with base configuration
@@ -72,6 +72,8 @@ apiClient.interceptors.response.use(
                 url: config?.url,
                 status: error.response?.status,
                 error: error.response?.data,
+                message: error.message,
+                code: error.code,
             });
         }
 
