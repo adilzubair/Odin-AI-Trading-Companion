@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTradeStore } from "@/store/useTradeStore";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
+import { tradesService } from "@/services/api/endpoints/trades";
 
 interface TradingPanelProps {
     stock: {
@@ -16,6 +17,7 @@ interface TradingPanelProps {
 export default function TradingPanel({ stock }: TradingPanelProps) {
     const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
     const [quantity, setQuantity] = useState<string>("");
+    const [isExecuting, setIsExecuting] = useState(false);
     const { executeTrade, positions } = useTradeStore();
 
     const quantityNum = parseInt(quantity) || 0;
@@ -33,7 +35,7 @@ export default function TradingPanel({ stock }: TradingPanelProps) {
         }
     };
 
-    const handleTrade = () => {
+    const handleTrade = async () => {
         if (quantityNum > 0) {
             // Validation for Sell
             if (activeTab === "sell" && quantityNum > availableShares) {
@@ -41,28 +43,53 @@ export default function TradingPanel({ stock }: TradingPanelProps) {
                 return;
             }
 
-            executeTrade({
-                type: activeTab,
-                ticker: stock.ticker,
-                stockName: stock.name,
-                quantity: quantityNum,
-                price: stock.price,
-                total,
-            });
+            setIsExecuting(true);
 
-            // Reset quantity
-            setQuantity("");
+            try {
+                // Call backend API to execute trade
+                // This will trigger market context and news fetching via ObserverService
+                const response = await tradesService.executeTrade({
+                    symbol: stock.ticker,
+                    quantity: quantityNum,
+                    side: activeTab,
+                    reason: `Manual ${activeTab} via Trade Panel`
+                });
 
-            // Show success message
-            toast.success(`${activeTab === "buy" ? "Bought" : "Sold"} ${quantityNum} shares of ${stock.ticker}`, {
-                description: `Total: ${formatCurrency(total)}`,
-            });
+                // Update local state with the executed trade
+                executeTrade({
+                    type: activeTab,
+                    ticker: stock.ticker,
+                    stockName: stock.name,
+                    quantity: quantityNum,
+                    price: stock.price,
+                    total,
+                });
 
-            console.log(`${activeTab.toUpperCase()} order executed:`, {
-                ticker: stock.ticker,
-                quantity: quantityNum,
-                total,
-            });
+                // Reset quantity
+                setQuantity("");
+
+                // Show success message
+                toast.success(`${activeTab === "buy" ? "Bought" : "Sold"} ${quantityNum} shares of ${stock.ticker}`, {
+                    description: `Total: ${formatCurrency(total)} • ${response.message || "Order submitted"}`,
+                });
+
+                console.log(`${activeTab.toUpperCase()} order executed:`, {
+                    ticker: stock.ticker,
+                    quantity: quantityNum,
+                    total,
+                    response
+                });
+            } catch (error) {
+                console.error("Trade execution failed:", error);
+                
+                // Show error message
+                const errorMessage = error instanceof Error ? error.message : "Failed to execute trade";
+                toast.error("Trade Failed", {
+                    description: errorMessage
+                });
+            } finally {
+                setIsExecuting(false);
+            }
         }
     };
 
@@ -144,13 +171,14 @@ export default function TradingPanel({ stock }: TradingPanelProps) {
             {/* Action Button */}
             <button
                 onClick={handleTrade}
-                disabled={quantityNum === 0 || (activeTab === "sell" && quantityNum > availableShares)}
-                className={`w-full py-3.5 rounded-lg text-sm font-semibold transition-all ${activeTab === "buy"
-                    ? "bg-green-500 hover:bg-green-600 text-white disabled:bg-green-500/30 disabled:cursor-not-allowed"
-                    : "bg-red-500 hover:bg-red-600 text-white disabled:bg-red-500/30 disabled:cursor-not-allowed"
-                    }`}
+                disabled={quantityNum === 0 || (activeTab === "sell" && quantityNum > availableShares) || isExecuting}
+                className={`w-full py-3.5 rounded-lg text-sm font-semibold transition-all ${
+                    activeTab === "buy"
+                        ? "bg-green-500 hover:bg-green-600 text-white disabled:bg-green-500/30 disabled:cursor-not-allowed"
+                        : "bg-red-500 hover:bg-red-600 text-white disabled:bg-red-500/30 disabled:cursor-not-allowed"
+                }`}
             >
-                {activeTab === "buy" ? "Buy" : "Sell"}
+                {isExecuting ? "Processing..." : activeTab === "buy" ? "Buy" : "Sell"}
             </button>
 
         </div>
