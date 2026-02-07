@@ -11,7 +11,8 @@ import logging
 from app.config import settings
 from app.core.database import init_db, close_db
 from app.core.scheduler import scheduler
-from app.api import analysis, autonomous, positions, health, observer, sentinel, monitor, market, portfolio, updates
+from app.api import analysis, autonomous, positions, health, observer, sentinel, monitor, market, portfolio, updates, websocket
+from app.core.market_stream import start_market_stream
 
 # Configure logging
 logging.basicConfig(
@@ -50,6 +51,11 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(run_daily_monitor, 'cron', hour=8, minute=0, id='daily_monitor_report')
         
         scheduler.start()
+    
+        scheduler.start()
+    
+    # Start WebSocket market price streaming
+    await start_market_stream()
     
     yield
     
@@ -90,6 +96,7 @@ app.include_router(monitor.router, prefix=settings.api_prefix, tags=["Monitor"])
 app.include_router(market.router, prefix=settings.api_prefix, tags=["Market"])
 app.include_router(portfolio.router, prefix=settings.api_prefix, tags=["Portfolio"])
 app.include_router(updates.router, prefix=settings.api_prefix, tags=["Real-Time Updates"])
+app.include_router(websocket.router, tags=["WebSocket"])  # WebSocket doesn't use prefix
 
 
 @app.exception_handler(Exception)
