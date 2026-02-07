@@ -5,8 +5,8 @@ Alpaca API integration service.
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopLossRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderType
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest
+from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
+from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest, CryptoLatestQuoteRequest, CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from typing import List, Optional, Dict, Any
 import logging
@@ -29,6 +29,11 @@ class AlpacaService:
         )
         
         self.data_client = StockHistoricalDataClient(
+            api_key=settings.alpaca_api_key,
+            secret_key=settings.alpaca_api_secret
+        )
+        
+        self.crypto_client = CryptoHistoricalDataClient(
             api_key=settings.alpaca_api_key,
             secret_key=settings.alpaca_api_secret
         )
@@ -90,16 +95,31 @@ class AlpacaService:
     async def get_latest_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get latest quote for a symbol."""
         try:
-            request = StockLatestQuoteRequest(symbol_or_symbols=symbol)
-            quotes = self.data_client.get_stock_latest_quote(request)
-            quote = quotes[symbol]
-            return {
-                "symbol": symbol,
-                "bid_price": float(quote.bid_price),
-                "ask_price": float(quote.ask_price),
-                "bid_size": quote.bid_size,
-                "ask_size": quote.ask_size,
-            }
+            # Check if crypto
+            is_crypto = "BTC" in symbol or "ETH" in symbol or "/" in symbol
+            
+            if is_crypto:
+                request = CryptoLatestQuoteRequest(symbol_or_symbols=symbol)
+                quotes = self.crypto_client.get_crypto_latest_quote(request)
+                quote = quotes[symbol]
+                return {
+                    "symbol": symbol,
+                    "bid_price": float(quote.bid_price),
+                    "ask_price": float(quote.ask_price),
+                    "bid_size": float(quote.bid_size),
+                    "ask_size": float(quote.ask_size),
+                }
+            else:
+                request = StockLatestQuoteRequest(symbol_or_symbols=symbol)
+                quotes = self.data_client.get_stock_latest_quote(request)
+                quote = quotes[symbol]
+                return {
+                    "symbol": symbol,
+                    "bid_price": float(quote.bid_price),
+                    "ask_price": float(quote.ask_price),
+                    "bid_size": quote.bid_size,
+                    "ask_size": quote.ask_size,
+                }
         except Exception as e:
             logger.error(f"Failed to get quote for {symbol}: {e}")
             return None
@@ -212,13 +232,25 @@ class AlpacaService:
             # Default to 365 days ago if no start date provided (to ensure data found)
             start_time = datetime.utcnow() - timedelta(days=365)
             
-            request = StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=tf,
-                limit=limit,
-                start=start_time
-            )
-            bars = self.data_client.get_stock_bars(request)
+            # Check if crypto
+            is_crypto = "BTC" in symbol or "ETH" in symbol or "/" in symbol
+            
+            if is_crypto:
+                request = CryptoBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=tf,
+                    limit=limit,
+                    start=start_time
+                )
+                bars = self.crypto_client.get_crypto_bars(request)
+            else:
+                request = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=tf,
+                    limit=limit,
+                    start=start_time
+                )
+                bars = self.data_client.get_stock_bars(request)
             
             # Extract data for the requested symbol
             # bars is a BarSet object, bars.data is a dict {symbol: [Bar, ...]}

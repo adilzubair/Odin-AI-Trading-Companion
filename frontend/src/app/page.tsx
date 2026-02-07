@@ -1,15 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { Brain, TrendingUp, ShoppingCart } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Brain, TrendingUp, ShoppingCart, Bell } from "lucide-react";
 import AnalysisTab from "@/components/tabs/AnalysisTab";
 import TraderTab from "@/components/tabs/TraderTab";
 import TradeTab from "@/components/tabs/TradeTab";
+import AlertsTab from "@/components/tabs/AlertsTab";
 import { useMockData } from "@/hooks/useMockData";
+import { useSentinelAlerts } from "@/hooks/api/useSentinel";
+import { toast } from "sonner";
 
 export default function Home() {
   useMockData();
-  const [activeTab, setActiveTab] = useState<"analysis" | "autoTrade" | "trade">("analysis");
+  const [activeTab, setActiveTab] = useState<"analysis" | "autoTrade" | "trade" | "alerts">("analysis");
+  const { unreadCount, alerts } = useSentinelAlerts();
+  const [prevAlertCount, setPrevAlertCount] = useState(0);
+
+  // Show toast when new alerts arrive
+  useEffect(() => {
+    if (alerts.length > prevAlertCount && prevAlertCount > 0) {
+      const newAlerts = alerts.length - prevAlertCount;
+      toast.info(`${newAlerts} new alert${newAlerts > 1 ? 's' : ''} from Sentinel`, {
+        description: "Similar market patterns detected",
+        duration: 5000,
+      });
+    }
+    setPrevAlertCount(alerts.length);
+  }, [alerts.length, prevAlertCount]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-200">
@@ -68,6 +85,26 @@ export default function Home() {
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("alerts")}
+              className={`flex items-center gap-2 px-1 py-2 text-sm font-medium transition-colors relative ${activeTab === "alerts"
+                ? "text-white"
+                : "text-gray-500 hover:text-gray-300"
+                }`}
+            >
+              <div className="relative">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                  </div>
+                )}
+              </div>
+              Alerts
+              {activeTab === "alerts" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
+              )}
+            </button>
           </div>
 
           {/* Status */}
@@ -90,9 +127,13 @@ export default function Home() {
           <div className="animate-fadeIn h-full">
             <TraderTab />
           </div>
-        ) : (
+        ) : activeTab === "trade" ? (
           <div className="animate-fadeIn h-full">
             <TradeTab />
+          </div>
+        ) : (
+          <div className="animate-fadeIn h-full">
+            <AlertsTab />
           </div>
         )}
       </main>

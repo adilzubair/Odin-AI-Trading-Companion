@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { apiClient } from "@/services/api/client";
+import { useMarketWebSocket } from "@/hooks/useMarketWebSocket";
 import type { Stock } from "@/types";
 
 interface PopularStocksProps {
@@ -23,13 +24,14 @@ export default function PopularStocks({ onSelectStock }: PopularStocksProps) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Initial load with parallel fetching (fast!)
     useEffect(() => {
         const fetchPopularStocks = async () => {
             try {
                 setLoading(true);
                 setError(null);
                 const response = await apiClient.get<PopularStockResponse[]>("/market/popular");
-                
+
                 // Map API response to Stock type
                 const mappedStocks: Stock[] = response.data.map((stock) => ({
                     ticker: stock.ticker,
@@ -37,15 +39,15 @@ export default function PopularStocks({ onSelectStock }: PopularStocksProps) {
                     price: stock.price,
                     change: stock.price * (stock.changePercentage / 100), // Calculate change from percentage
                     changePercentage: stock.changePercentage,
-                    miniChartData: stock.miniChartData?.length > 0 
+                    miniChartData: stock.miniChartData?.length > 0
                         ? stock.miniChartData.map((d, i) => ({ timestamp: Date.now() - (stock.miniChartData.length - i) * 60000, value: d.value }))
                         : [
-                            { timestamp: Date.now() - 120000, value: stock.price * 0.98 }, 
-                            { timestamp: Date.now() - 60000, value: stock.price * 0.99 }, 
+                            { timestamp: Date.now() - 120000, value: stock.price * 0.98 },
+                            { timestamp: Date.now() - 60000, value: stock.price * 0.99 },
                             { timestamp: Date.now(), value: stock.price }
                         ],
                 }));
-                
+
                 setStocks(mappedStocks);
             } catch (err) {
                 console.error("Failed to fetch popular stocks:", err);
@@ -56,11 +58,39 @@ export default function PopularStocks({ onSelectStock }: PopularStocksProps) {
         };
 
         fetchPopularStocks();
-        
-        // Refresh every 30 seconds
-        const interval = setInterval(fetchPopularStocks, 30000);
-        return () => clearInterval(interval);
     }, []);
+
+    // WebSocket for real-time price updates
+    const tickers = useMemo(() => stocks.map(s => s.ticker), [stocks]);
+
+    const { connected, error: wsError, reconnecting } = useMarketWebSocket({
+        tickers,
+        enabled: stocks.length > 0, // Enable when we have stocks
+        onPriceUpdate: (update) => {
+            // Update stock price in real-time
+            setStocks(prev => prev.map(stock => {
+                if (stock.ticker === update.ticker) {
+                    // Calculate new change percentage
+                    const oldPrice = stock.price;
+                    const newChangePercentage = oldPrice > 0
+                        ? ((update.price - oldPrice) / oldPrice) * 100 + stock.changePercentage
+                        : stock.changePercentage;
+
+                    return {
+                        ...stock,
+                        price: update.price,
+                        change: update.price - oldPrice + stock.change,
+                        changePercentage: newChangePercentage
+                    };
+                }
+                return stock;
+            }));
+        },
+        onError: (err) => {
+            console.error('[PopularStocks] WebSocket error:', err);
+        }
+    });
+
 
     if (loading && stocks.length === 0) {
         return (

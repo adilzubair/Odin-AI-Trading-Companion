@@ -44,33 +44,84 @@ class SentinelService:
                 
             # 3. Analyze the match
             history_metadata = best_match['metadata']
-            activity_type = history_metadata.get('activity_type')
+            activity_id = history_metadata.get('activity_id')
             
-            # 4. Generate Alert Content
+            # Fetch the matched activity details
+            activity = None
+            if activity_id:
+                activity = await self.db.get(UserActivity, activity_id)
+            
+            # 4. Generate Enhanced Alert Content
+            news_event = signal.reason or "Market event"
+            
+            # Build past action description
+            if activity:
+                action_desc = f"{activity.side or 'traded'} {activity.quantity or 0:.0f} shares"
+                if activity.price_at_action:
+                    action_desc += f" at ${activity.price_at_action:.2f}"
+            else:
+                action_desc = "traded"
+            
+            # Get outcome text
+            outcome_text = ""
+            if activity and activity.outcome:
+                outcome_text = f"• Result: {activity.outcome}"
+            else:
+                outcome_text = "• Result: Outcome not yet recorded"
+            
+            # Determine alert type based on outcome
+            alert_type = "pattern_match"
+            advice = "Consider reviewing this pattern before trading."
+            
+            if activity and activity.outcome:
+                outcome_lower = activity.outcome.lower()
+                if "profit" in outcome_lower or ("+" in activity.outcome and "$" in activity.outcome):
+                    alert_type = "opportunity"
+                    advice = "This pattern previously led to a profit. Similar opportunity detected."
+                elif "loss" in outcome_lower or ("-" in activity.outcome and "$" in activity.outcome):
+                    alert_type = "risk_warning"
+                    advice = "⚠️ Warning: This pattern previously led to a loss. Review carefully before trading."
+            
+            # Build rich message
             title = f"Proactive Alert: {signal.symbol}"
             message = (
-                f"This news event matches your history (Similarity: {similarity:.2f}).\n"
-                f"Last time a similar event occurred, you performed a '{activity_type}' action.\n"
-                f"Do you want to review the setup?"
+                f"📰 News Event: \"{news_event}\"\n\n"
+                f"⚠️ Similar Situation Detected ({similarity:.0%} match)\n\n"
+                f"Last time during similar news:\n"
+                f"• You {action_desc}\n"
+                f"{outcome_text}\n\n"
+                f"💡 {advice}"
             )
+            
+            # Store additional context in meta_data
+            meta_data = {
+                "signal_reason": signal.reason,
+                "signal_source": signal.source,
+                "past_side": activity.side if activity else None,
+                "past_quantity": float(activity.quantity) if activity and activity.quantity else None,
+                "past_price": float(activity.price_at_action) if activity and activity.price_at_action else None,
+                "past_outcome": activity.outcome if activity else None,
+                "news_context": activity.news_context if activity else None
+            }
             
             # 5. Save Alert
             alert = Alert(
                 user_id="default_user",
                 title=title,
                 message=message,
-                alert_type="pattern_match",
+                alert_type=alert_type,
                 signal_id=signal.id,
-                matched_activity_id=history_metadata.get('activity_id'),
+                matched_activity_id=activity_id,
                 similarity_score=similarity,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.utcnow(),
+                meta_data=meta_data
             )
             
             self.db.add(alert)
             await self.db.commit()
             await self.db.refresh(alert)
             
-            logger.info(f"Sentinel generated alert for {signal.symbol} (Score: {similarity:.2f})")
+            logger.info(f"Sentinel generated alert for {signal.symbol} (Score: {similarity:.2f}, Type: {alert_type})")
             return alert
 
         except Exception as e:

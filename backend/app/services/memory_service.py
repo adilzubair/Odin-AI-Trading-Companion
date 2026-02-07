@@ -2,6 +2,9 @@ import chromadb
 from chromadb.config import Settings
 from openai import OpenAI
 import logging
+import os
+from typing import List, Dict
+import uuid
 
 from app.config import settings
 
