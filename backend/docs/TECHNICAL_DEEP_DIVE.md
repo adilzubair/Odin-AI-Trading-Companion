@@ -1,0 +1,112 @@
+# 🧠 PsyTrade System Architecture & Code Flow
+
+This document explains **how the system works under the hood**. It details the flow of data for every major user interaction and background process.
+
+---
+
+## 🏗 High-Level Architecture
+The backend is built on **FastAPI** (Python) and uses a **"Tripod" Architecture** supported by an **Auto-Pilot** engine.
+
+| Component | Role | Key Service (`app/services`) |
+| :--- | :--- | :--- |
+| **Observer** | The "Black Box Recorder". Logs user actions & context. | `observer_service.py` |
+| **Sentinel** | The "Proactive Shield". Matches news to past user mistakes. | `sentinel_service.py` |
+| **Monitor** | The "Analyst". Runs daily reports on your watchlist. | `monitor_service.py` |
+| **Auto-Pilot** | The "Trader". Autonomous execution with guardrails. | `autonomous_service.py` |
+
+---
+
+## 🔄 Detailed Code Flows
+
+### 1. 👤 The User Makes a Manual Trade
+*What happens when the user clicks "Buy" on the frontend?*
+
+1.  **Request**: Frontend sends `POST /trades/execute` with `{ symbol: "AAPL", quantity: 10, reason: "FOMO" }`.
+2.  **Execution (`app/api/positions.py`)**:
+    *   The API calls `AlpacaService.place_market_order()`.
+    *   A real order is sent to the Alpaca Brokerage API.
+3.  **Observation (`app/services/observer_service.py`)**:
+    *   Immediately after the trade, the API calls `ObserverService.log_action()`.
+    *   **Context Gathering**: The Observer fetches the current *Market Sentiment* (News + Social Volume) for AAPL.
+    *   **Vector Construction**: It combines `[Sentiment, Volatility, User_Reason, Time]` into a text embedding.
+    *   **Storage**:
+        *   Saves row to `UserActivity` (Postgres).
+        *   Saves vector to `PsychMemory` (ChromaDB) for future retrieval.
+
+**Outcome**: You just bought AAPL, and the AI now remembers *exactly* how you felt and what the market was doing at that moment.
+
+---
+
+### 2. 🛡 The Sentinel Detects a Risk (Background Process)
+*What happens when breaking news hits?*
+
+1.  **Trigger (`app/core/scheduler.py`)**: The `gather_signals_job` runs every 30 seconds.
+2.  **Detection (`app/services/signal_service.py`)**:
+    *   Scans news/social media for spikes.
+    *   Finds a "High Sentiment" signal for AAPL.
+3.  **The Check (`app/services/sentinel_service.py`)**:
+    *   The `Sentinel` takes this new signal (e.g., "AAPL earnings beat expectations").
+    *   **RAG Search**: It queries `PsychMemory` (ChromaDB): *"What happened last time the user traded AAPL during positive earnings?"*
+4.  **Pattern Match**:
+    *   *Result*: "Last time this happened, User bought at the top and lost 5%."
+5.  **Alert Generation**:
+    *   The Sentinel creates an entry in the `Alert` table.
+    *   Frontend polling `GET /sentinel/alerts` sees: *"Warning: You typically lose money on Earnings trades. Consider waiting."*
+
+**Outcome**: The system warns you *before* you make a habitual mistake.
+
+---
+
+### 3. 🤖 The Auto-Pilot Executes a Trade
+*How does the bot trade on its own?*
+
+1.  **Trigger**: `run_analysis_job` runs every 5 minutes.
+2.  **Signal Selection**: Checks internal Signal database for high-momentum tickers.
+3.  **Analysis (`app/services/analysis_service.py`)**:
+    *   Spins up the **TradingAgents** swarm (LangChain).
+    *   *Analyst A (Technical)*: "RSI is 30 (Oversold)."
+    *   *Analyst B (Fundamentals)*: "P/E ratio is good."
+    *   *Debate*: Agents argue.
+    *   *Decision*: "BUY AAPL with 85% Confidence."
+4.  **The Guardrails (`app/services/autonomous_service.py` -> `_check_guardrails`)**:
+    *   Before trading, it loads `PortfolioConfig`.
+    *   *Check 1*: Is `total_budget` ($1000) > `current_allocation`?
+    *   *Check 2*: Is `trade_value` < `max_position_size` ($100)?
+5.  **Execution**:
+    *   If Guardrails PASS: Calls `AlpacaService`.
+    *   If Guardrails FAIL: Logs "Trade aborted due to Risk Limits."
+
+**Outcome**: The bot trades autonomously but strictly obeys the budget you set in the "Manager" dashboard.
+
+---
+
+### 4. 📺 The Monitor (Daily Report)
+*How does the watchlist work?*
+
+1.  **Configuration**: User calls `POST /monitor/add` with "TSLA".
+2.  **Scheduling**: `scheduler.py` runs `monitor_watchlist_analysis` (e.g., Daily/Hourly).
+3.  **Process**:
+    *   Iterates through all `is_active` tickers in `MonitoredTicker` table.
+    *   Triggers `AnalysisService.run_analysis(ticker="TSLA")`.
+    *   Saves the detailed PDF-style text report to Postgres.
+4.  **Viewing**: User wakes up, checks `GET /analysis/history/TSLA`, and reads the AI's deep-dive report.
+
+---
+
+## 💾 Database Schema Overview
+
+*   **`users`**: Auth & Profile.
+*   **`portfolio_config`**: The constraints for the Auto-Pilot (Budget, Risk).
+*   **`monitored_tickers`**: Your watchlist.
+*   **`user_activity`**: The raw log of your actions.
+*   **`psych_memory` (ChromaDB)**: The vector version of your history (Searchable by concept).
+*   **`alerts`**: Proactive warnings generated by Sentinel.
+*   **`positions`**: Live trades (synced with Alpaca).
+
+## 🔌 API Interaction Model
+The Frontend is a "dumb terminal". It does not calculate anything.
+*   **To Trade**: Call `/trades/execute`.
+*   **To Change Bot**: Call `/autonomous/config`.
+*   **To See Risks**: Poll `/sentinel/alerts`.
+
+This decoupling ensures that even if you close the browser, the **Observer** is still remembering, and the **Auto-Pilot** is still trading (if enabled).
