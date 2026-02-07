@@ -77,6 +77,8 @@ export function useMarketWebSocket({
             };
 
             socket.onmessage = (event) => {
+                if (ws.current !== socket) return;
+
                 try {
                     const message: WebSocketMessage = JSON.parse(event.data);
 
@@ -113,6 +115,7 @@ export function useMarketWebSocket({
             };
 
             socket.onerror = (event) => {
+                if (ws.current !== socket) return;
                 console.error('[WebSocket] Connection error:', event);
                 setError('Connection error');
                 if (onErrorRef.current) onErrorRef.current('WebSocket connection error');

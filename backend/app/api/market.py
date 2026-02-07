@@ -9,7 +9,7 @@ from fastapi import Depends
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/market/quote/{symbol}")
+@router.get("/market/quote/{symbol:path}")
 async def get_market_quote(
     symbol: str,
     # api_key: str = Depends(verify_api_key) # Optional: secure if needed
@@ -30,7 +30,7 @@ async def get_market_quote(
         logger.error(f"Error fetching quote for {symbol}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/market/history/{symbol}")
+@router.get("/market/history/{symbol:path}")
 async def get_market_history(
     symbol: str,
     timeframe: str = Query("1d", description="Timeframe: 1m, 5m, 15m, 1h, 1d"),
@@ -70,9 +70,10 @@ STOCK_NAMES = {
     "AMD": "Advanced Micro Devices",
     "NFLX": "Netflix Inc.",
     "SPY": "SPDR S&P 500 ETF",
+    "BTC/USD": "Bitcoin",
 }
 
-POPULAR_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "AMD"]
+POPULAR_SYMBOLS = ["BTC/USD", "AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "AMD"]
 
 
 @router.get("/market/popular")
@@ -149,7 +150,7 @@ async def get_popular_stocks():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/market/detail/{symbol}")
+@router.get("/market/detail/{symbol:path}")
 async def get_stock_detail(symbol: str):
     """
     Get detailed stock information for the trade detail page.
